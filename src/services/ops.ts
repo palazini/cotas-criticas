@@ -19,10 +19,27 @@ export type OpProgress = {
   completo: boolean;
 }; 
 
-export async function listOpsWithProgress(): Promise<(OpRow & { progress?: OpProgress })[]> {
+export async function listOpsWithProgress(): Promise<(OpRow & { progress?: OpProgress; op_medicoes?: any[] })[]> {
   const { data: ops, error } = await supabase
     .from('ops')
-    .select('id, status, qtd_total, freq_n, created_at, amostras, desenho:desenho_id (nome)')
+    .select(`
+      id,
+      status,
+      qtd_total,
+      freq_n,
+      amostras,
+      created_at,
+      desenho:desenho_id ( id, nome ),
+      op_medicoes (
+        id,
+        peca_idx,
+        valor,
+        ok,
+        medido_em,
+        cota:cota_id ( id, tag ),
+        autor:medido_por ( id, full_name )
+      )
+    `)
     .order('created_at', { ascending: false });
   if (error) throw error;
 
@@ -36,10 +53,9 @@ export async function listOpsWithProgress(): Promise<(OpRow & { progress?: OpPro
   if (e2) throw e2;
 
   const map = new Map<string, OpProgress>((prog ?? []).map((p: any) => [p.op_id, p]));
-  const opsRows = (ops ?? []) as any[];
-
-  return opsRows.map((o) => ({ ...o, progress: map.get(o.id) })) as (OpRow & { progress?: OpProgress })[];
+  return (ops as any[]).map((o) => ({ ...o, progress: map.get(o.id) }));
 }
+
 
 export async function createOp(payload: { id: string; desenho_id: string; qtd_total?: number; freq_n?: number }) {
   const { id, desenho_id, qtd_total, freq_n } = payload;
@@ -157,10 +173,18 @@ export async function inserirMedicao(payload: {
   const { data, error } = await supabase
     .from('op_medicoes')
     .insert(payload)
-    .select(
-      // 👇 inclui cota_id "plano" para o cálculo de conclusão
-      'id, peca_idx, valor, ok, medido_em, cota_id, cota:cota_id ( tag ), autor:medido_por ( full_name )'
-    )
+    .select(`
+      id,
+      op_id,
+      peca_idx,
+      valor,
+      ok,
+      medido_em,
+      cota_id,
+      medido_por,
+      cota:cota_id ( id, tag ),
+      autor:medido_por ( id, full_name )
+    `)
     .single();
   if (error) throw error;
   return data;
@@ -169,13 +193,46 @@ export async function inserirMedicao(payload: {
 export async function listarMedicoesDaOp(op_id: string) {
   const { data, error } = await supabase
     .from('op_medicoes')
-    .select('id, peca_idx, valor, ok, medido_em, cota_id, cota:cota_id ( tag ), autor:medido_por ( full_name )')
+    .select(`
+      id,
+      op_id,
+      peca_idx,
+      valor,
+      ok,
+      medido_em,
+      cota_id,
+      medido_por,
+      cota:cota_id ( id, tag ),
+      autor:medido_por ( id, full_name )
+    `)
     .eq('op_id', op_id)
     .order('medido_em', { ascending: false });
   if (error) throw error;
   return data;
 }
 export { listarMedicoesDaOp as listOpMedicoes };
+
+export async function atualizarMedicao(id: string, novoValor: number) {
+  const { data, error } = await supabase
+    .from('op_medicoes')
+    .update({ valor: novoValor })
+    .eq('id', id)
+    .select(`
+      id,
+      op_id,
+      peca_idx,
+      valor,
+      ok,
+      medido_em,
+      cota_id,
+      medido_por,
+      cota:cota_id ( id, tag ),
+      autor:medido_por ( id, full_name )
+    `)
+    .single();
+  if (error) throw error;
+  return data;
+}
 
 export async function concluirOp(op_id: string) {
   const { error } = await supabase
