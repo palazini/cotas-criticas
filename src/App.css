@@ -1,0 +1,37 @@
+:root {
+  --bg: #0b0f14;
+  --card: #141a22;
+  --text: #e8eef6;
+  --muted: #a9b7c6;
+  --border: #243040;
+  --accent: #3ea6ff;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif; }
+
+a { color: var(--accent); text-decoration: none; }
+nav {
+  display: flex; gap: 12px; align-items: center;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); background: #0e141b; position: sticky; top: 0;
+}
+nav a { padding: 6px 10px; border-radius: 8px; }
+nav a:hover { background: #101a25; }
+nav button {
+  background: #1a2330; color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 12px; cursor: pointer;
+}
+nav button:hover { background: #1f2a3a; }
+
+.container { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+input, select, button, textarea {
+  background: #111823; color: var(--text); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+label { color: var(--muted); font-size: 0.9rem; }
+h1, h2, h3 { margin-top: 0; }

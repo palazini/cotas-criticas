@@ -1,0 +1,1 @@
+export default function OpNew(){ return <div>Gestor › Nova OP</div>; }
