@@ -44,6 +44,7 @@ export default function DesenhosEdit() {
   const [desenho, setDesenho] = useState<Desenho | null>(null);
   const [cotas, setCotas] = useState<Cota[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
@@ -77,30 +78,52 @@ export default function DesenhosEdit() {
   // carregar desenho + cotas
   useEffect(() => {
     (async () => {
+      if (!id) return; // segurança
       setLoading(true);
-      const q = await supabase
-        .from('desenhos')
-        .select(`
-          id,codigo,nome,imagem_url,
-          cotas:id (
-            id,desenho_id,etiqueta,x_percent,y_percent,observacao,
-            nominal,tol_menos,tol_mais,unidade
-          )
-        `)
-        .eq('id', id)
-        .single();
+      setNotFound(false);
 
-      if (q.error || !q.data) {
-        notifications.show({ color: 'red', title: 'Desenho não encontrado', message: q.error?.message || '' });
-        nav('/gestor/desenhos');
+      // 1) Desenho
+      const d = await supabase
+        .from('desenhos')
+        .select('id,codigo,nome,imagem_url')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (d.error) {
+        notifications.show({ color: 'red', title: 'Erro ao carregar desenho', message: d.error.message || '' });
+        setDesenho(null);
+        setCotas([]);
+        setLoading(false);
         return;
       }
+      if (!d.data) {
+        setNotFound(true);
+        setDesenho(null);
+        setCotas([]);
+        setLoading(false);
+        return;
+      }
+      setDesenho(d.data as Desenho);
 
-      setDesenho({ id: q.data.id, codigo: q.data.codigo, nome: q.data.nome, imagem_url: q.data.imagem_url });
-      setCotas(((q.data as any).cotas || []).sort((a: any, b: any) => a.etiqueta.localeCompare(b.etiqueta)));
+      // 2) Cotas do desenho
+      const c = await supabase
+        .from('cotas')
+        .select('id,desenho_id,etiqueta,x_percent,y_percent,observacao,nominal,tol_menos,tol_mais,unidade')
+        .eq('desenho_id', id)
+        .order('etiqueta', { ascending: true });
+
+      if (!c.error && c.data) {
+        setCotas((c.data as Cota[]).slice().sort((a, b) => a.etiqueta.localeCompare(b.etiqueta)));
+      } else {
+        setCotas([]);
+        if (c.error) {
+          notifications.show({ color: 'red', title: 'Erro ao carregar cotas', message: c.error.message });
+        }
+      }
+
       setLoading(false);
     })();
-  }, [id, nav]);
+  }, [id]);
 
   const suggested = useMemo(() => nextEtiquetaFrom(cotas), [cotas]);
 
@@ -245,10 +268,35 @@ export default function DesenhosEdit() {
     }
   }
 
-  if (loading || !desenho) {
+  if (loading) {
     return (
       <Card withBorder radius="lg">
         <Group justify="center" py="xl"><Loader /></Group>
+      </Card>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <>
+        <PageHeader
+          title="Desenho não encontrado"
+          subtitle="Verifique o link ou tente novamente"
+          rightSection={<Button variant="default" onClick={() => nav('/gestor/desenhos')}>Voltar</Button>}
+        />
+        <Card withBorder radius="lg">
+          <Group justify="center" py="xl">
+            <Text c="dimmed">Nenhum registro com esse ID.</Text>
+          </Group>
+        </Card>
+      </>
+    );
+  }
+
+  if (!desenho) {
+    return (
+      <Card withBorder radius="lg">
+        <Group justify="center" py="xl"><Text c="dimmed">Não foi possível carregar o desenho.</Text></Group>
       </Card>
     );
   }

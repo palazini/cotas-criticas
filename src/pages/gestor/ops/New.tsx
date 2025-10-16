@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Group, NumberInput, Select, Stack, TextInput } from '@mantine/core';
+import { Button, Card, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../../components/PageHeader';
@@ -33,7 +33,9 @@ export default function OPsNew() {
       const { data, error } = await supabase
         .from('desenhos')
         .select('id,codigo,nome')
+        .eq('archived', false)                // << só desenhos ATIVOS
         .order('updated_at', { ascending: false });
+
       if (!error && data) {
         setOpts(data.map((d) => ({ value: d.id, label: `${d.codigo} — ${d.nome}` })));
       }
@@ -48,7 +50,7 @@ export default function OPsNew() {
     try {
       const hasParams = (qty != null && qty > 0) || (freq != null && freq > 0);
 
-      // 1) cria a OP
+      // cria a OP
       const { data: opData, error: opErr } = await supabase
         .from('ops')
         .insert({
@@ -63,7 +65,7 @@ export default function OPsNew() {
         .single();
       if (opErr) throw opErr;
 
-      // 2) gera amostras (opcional)
+      // gera amostras (opcional)
       if (previewAmostras.length > 0) {
         const rows = previewAmostras.map((indice) => ({ op_id: opData.id, indice }));
         const { error: amErr } = await supabase.from('op_amostras').insert(rows);
@@ -92,11 +94,12 @@ export default function OPsNew() {
           />
           <Select
             label="Desenho"
-            placeholder="Selecione..."
+            placeholder={opts.length ? 'Selecione...' : 'Nenhum desenho ativo (veja Arquivados)'}
             data={opts}
             value={desenhoId}
             onChange={setDesenhoId}
             searchable
+            disabled={opts.length === 0}
           />
           <Group grow>
             <NumberInput
@@ -118,9 +121,7 @@ export default function OPsNew() {
           </Group>
 
           {previewAmostras.length > 0 && (
-            <div>
-              Amostras geradas: <strong>{previewAmostras.join(', ')}</strong>
-            </div>
+            <Text>Amostras geradas: <strong>{previewAmostras.join(', ')}</strong></Text>
           )}
 
           <Group justify="flex-end" mt="sm">

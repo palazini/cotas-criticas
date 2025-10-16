@@ -1,6 +1,6 @@
-import { AppShell, NavLink, ScrollArea, Title, Group, Text, Button } from '@mantine/core';
+import { AppShell, NavLink, ScrollArea, Title, Group, Text, Button, Image } from '@mantine/core';
 import { IconListDetails, IconFolder, IconHome2, IconLogout } from '@tabler/icons-react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../app/AuthProvider';
 
 export default function GestorLayout() {
@@ -9,19 +9,30 @@ export default function GestorLayout() {
   const { pathname } = useLocation();
 
   return (
-    <AppShell
-      header={{ height: 60 }}
-      navbar={{ width: 260, breakpoint: 'sm' }}
-      padding="md"
-    >
+    <AppShell header={{ height: 60 }} navbar={{ width: 260, breakpoint: 'sm' }} padding="md">
       <AppShell.Header>
         <Group justify="space-between" px="md" h="100%">
-          <Group>
+          <Group gap="sm" align="center">
+            <Link to="/gestor" title="Ir para o painel do Gestor" style={{ display: 'block', lineHeight: 0 }}>
+              <Image
+                src="/ci-logo.png"
+                alt="CI"
+                h={45}
+                fit="contain"
+                draggable={false}
+                style={{ display: 'block' }}
+              />
+            </Link>
             <Title order={4}>Cotas Críticas — Gestor</Title>
           </Group>
+
           <Group gap="sm">
             <Text c="dimmed" size="sm">{user?.email}</Text>
-            <Button variant="light" leftSection={<IconLogout size={16} />} onClick={() => signOut().then(() => nav('/login'))}>
+            <Button
+              variant="light"
+              leftSection={<IconLogout size={16} />}
+              onClick={() => signOut().then(() => nav('/login'))}
+            >
               Sair
             </Button>
           </Group>

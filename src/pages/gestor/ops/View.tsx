@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Badge, Button, Card, Group, Image, Loader, ScrollArea, Table, Text, Switch, Modal, rem } from '@mantine/core';
-import { IconDownload } from '@tabler/icons-react';
+import {
+  Alert, Badge, Button, Card, Group, Image, Loader, Modal, ScrollArea, Stack, Table, Text, Switch, rem
+} from '@mantine/core';
+import { IconDownload, IconAlertTriangle } from '@tabler/icons-react';
 import PageHeader from '../../../components/PageHeader';
 import { supabase } from '../../../lib/supabase';
 import { notifications } from '@mantine/notifications';
@@ -55,21 +57,23 @@ export default function OPsView() {
       }
       setOp(oq.data as OP);
 
-      // Desenho
+      // Desenho (pode não existir)
       const dq = await supabase
         .from('desenhos')
         .select('id,codigo,nome,imagem_url')
         .eq('id', oq.data.desenho_id)
-        .single();
+        .maybeSingle();
       if (!dq.error && dq.data) setDesenho(dq.data as Desenho);
+      else setDesenho(null); // ausente/excluído
 
-      // Cotas (com tolerâncias)
+      // Cotas (se o desenho tiver sido apagado, possivelmente não haverá cotas)
       const cq = await supabase
         .from('cotas')
         .select('id,etiqueta,nominal,tol_menos,tol_mais,unidade')
         .eq('desenho_id', oq.data.desenho_id)
         .order('etiqueta', { ascending: true });
       if (!cq.error && cq.data) setCotas(cq.data as Cota[]);
+      else setCotas([]);
 
       // Amostras
       const aq = await supabase
@@ -147,7 +151,7 @@ export default function OPsView() {
     return `${p(Number(c.nominal))}${u}${mais}${menos}`;
   }
 
-  // Resumo por cota (lidos/ok/fora/%fora)
+  // Resumo por cota
   const statsPorCota = useMemo(() => {
     return cotas.map((c) => {
       let lidos = 0, ok = 0, fora = 0;
@@ -182,7 +186,7 @@ export default function OPsView() {
     lines.push('');
     lines.push(['Totais', `Lidos: ${totals.totalLidos} de ${totals.totalEsperado} (${totals.pct}%)`].join(';'));
 
-    // ADIÇÃO: BOM + CRLF
+    // BOM + CRLF para Excel/PT-BR
     const bom = '\ufeff';
     const csvText = bom + lines.join('\r\n');
     const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
@@ -194,7 +198,8 @@ export default function OPsView() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading || !op || !desenho) {
+  // 🔧 não bloqueia a tela quando não existe desenho
+  if (loading || !op) {
     return (
       <Card withBorder radius="lg">
         <Group justify="center" py="xl"><Loader /></Group>
@@ -202,10 +207,15 @@ export default function OPsView() {
     );
   }
 
+  const hasDesenho = !!desenho;
+  const headerTitle = hasDesenho
+    ? `${op.codigo} — ${desenho!.codigo} / ${desenho!.nome}`
+    : `${op.codigo} — Desenho excluído`;
+
   return (
     <>
       <PageHeader
-        title={`${op.codigo} — ${desenho.codigo} / ${desenho.nome}`}
+        title={headerTitle}
         subtitle={`Status: ${op.status} — Criada em: ${op.created_at?.slice(0,19).replace('T',' ')}`}
         rightSection={
           <Group>
@@ -224,177 +234,203 @@ export default function OPsView() {
           gap: rem(12)
         }}
       >
-        {/* ESQUERDA — Desenho + badges (imagem um pouco menor) */}
+        {/* ESQUERDA — Imagem (se existir) ou aviso de desenho excluído */}
         <Card withBorder radius="lg" p="xs" style={{ gridRow: '1 / span 2' }}>
-          <Image
-            src={desenho.imagem_url}
-            alt={desenho.nome}
-            radius="md"
-            fit="contain"
-            h={420}
-            onClick={() => setImgOpen(true)}
-            style={{ cursor: 'zoom-in' }}
-            title="Clique para ampliar"
-          />
-          <Group gap="sm" mt="xs">
-            <Badge variant="light" color={op.qty != null ? 'indigo' : 'grape'}>QTY: {qtyMostrar ?? '-'}</Badge>
-            <Badge variant="light" color={op.freq != null ? 'indigo' : 'grape'}>FREQ: {freqMostrar ?? '-'}</Badge>
-            {origem && (
-              <Badge variant="outline" color={origem === 'operador' ? 'grape' : 'indigo'}>
-                Origem: {origem === 'operador' ? 'Operador' : 'Gestor'}{op?.params_origem ? '' : ' (inferida)'}
-              </Badge>
-            )}
-            <Badge color="teal" variant="light">Leituras: {totals.totalLidos}/{totals.totalEsperado} ({totals.pct}%)</Badge>
-          </Group>
+          {hasDesenho ? (
+            <>
+              <Image
+                src={desenho!.imagem_url}
+                alt={desenho!.nome}
+                radius="md"
+                fit="contain"
+                h={420}
+                onClick={() => setImgOpen(true)}
+                style={{ cursor: 'zoom-in' }}
+                title="Clique para ampliar"
+              />
+              <Group gap="sm" mt="xs">
+                <Badge variant="light" color={op.qty != null ? 'indigo' : 'grape'}>QTY: {qtyMostrar ?? '-'}</Badge>
+                <Badge variant="light" color={op.freq != null ? 'indigo' : 'grape'}>FREQ: {freqMostrar ?? '-'}</Badge>
+                {origem && (
+                  <Badge variant="outline" color={origem === 'operador' ? 'grape' : 'indigo'}>
+                    Origem: {origem === 'operador' ? 'Operador' : 'Gestor'}{op?.params_origem ? '' : ' (inferida)'}
+                  </Badge>
+                )}
+                <Badge color="teal" variant="light">Leituras: {totals.totalLidos}/{totals.totalEsperado} ({totals.pct}%)</Badge>
+              </Group>
+            </>
+          ) : (
+            <Stack gap="xs">
+              <Alert color="orange" variant="light" icon={<IconAlertTriangle size={16} />}>
+                <Text fw={600}>Desenho excluído</Text>
+                <Text c="dimmed" size="sm">
+                  Esta OP permanece arquivada, mas a imagem e as cotas foram removidas junto com o desenho.
+                </Text>
+              </Alert>
+              <Group gap="sm" mt="xs">
+                <Badge variant="light" color={op.qty != null ? 'indigo' : 'grape'}>QTY: {qtyMostrar ?? '-'}</Badge>
+                <Badge variant="light" color={op.freq != null ? 'indigo' : 'grape'}>FREQ: {freqMostrar ?? '-'}</Badge>
+                {origem && (
+                  <Badge variant="outline" color={origem === 'operador' ? 'grape' : 'indigo'}>
+                    Origem: {origem === 'operador' ? 'Operador' : 'Gestor'}{op?.params_origem ? '' : ' (inferida)'}
+                  </Badge>
+                )}
+                <Badge color="teal" variant="light">Leituras: {totals.totalLidos}/{totals.totalEsperado} ({totals.pct}%)</Badge>
+              </Group>
+            </Stack>
+          )}
         </Card>
 
-        {/* DIREITA — Resumo por cota + Matriz empilhados */}
+        {/* DIREITA — Resumo por cota */}
         <Card withBorder radius="lg" p="md" style={{ gridRow: 1 }}>
-            <Group justify="space-between" mb="xs">
-              <Text fw={600}>Resumo por cota</Text>
-                <Switch
-                  size="sm"
-                  checked={apenasFora}
-                  onChange={(e) => setApenasFora(e.currentTarget.checked)}
-                  label="Realçar apenas fora"
-                />
-            </Group>
-            <ScrollArea type="auto">
-              <Table striped highlightOnHover stickyHeader>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th style={{ width: 80 }}>Cota</Table.Th>
-                    <Table.Th style={{ width: 110 }}>Leituras</Table.Th>
-                    <Table.Th style={{ width: 90 }}>OK</Table.Th>
-                    <Table.Th style={{ width: 90 }}>Fora</Table.Th>
-                    <Table.Th style={{ width: 100 }}>% Fora</Table.Th>
-                      <Table.Th>Especificação</Table.Th>
+          <Group justify="space-between" mb="xs">
+            <Text fw={600}>Resumo por cota</Text>
+            <Switch
+              size="sm"
+              checked={apenasFora}
+              onChange={(e) => setApenasFora(e.currentTarget.checked)}
+              label="Realçar apenas fora"
+            />
+          </Group>
+          <ScrollArea type="auto">
+            <Table striped highlightOnHover stickyHeader>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ width: 80 }}>Cota</Table.Th>
+                  <Table.Th style={{ width: 110 }}>Leituras</Table.Th>
+                  <Table.Th style={{ width: 90 }}>OK</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Fora</Table.Th>
+                  <Table.Th style={{ width: 100 }}>% Fora</Table.Th>
+                  <Table.Th>Especificação</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {statsPorCota.map((s) => (
+                  <Table.Tr key={s.id}>
+                    <Table.Td><Text fw={700}>{s.etiqueta}</Text></Table.Td>
+                    <Table.Td>{s.lidos}</Table.Td>
+                    <Table.Td><Text c="teal" fw={600}>{s.ok}</Text></Table.Td>
+                    <Table.Td><Text c={s.fora > 0 ? 'red' : 'dimmed'} fw={700}>{s.fora}</Text></Table.Td>
+                    <Table.Td>
+                      <Badge color={s.pctFora > 0 ? 'red' : 'teal'} variant="light">
+                        {s.pctFora}%
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td><Text c="dimmed" size="sm">{s.spec || '—'}</Text></Table.Td>
                   </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {statsPorCota.map((s) => (
-                    <Table.Tr key={s.id}>
-                      <Table.Td><Text fw={700}>{s.etiqueta}</Text></Table.Td>
-                      <Table.Td>{s.lidos}</Table.Td>
-                      <Table.Td><Text c="teal" fw={600}>{s.ok}</Text></Table.Td>
-                      <Table.Td><Text c={s.fora > 0 ? 'red' : 'dimmed'} fw={700}>{s.fora}</Text></Table.Td>
-                      <Table.Td>
-                        <Badge color={s.pctFora > 0 ? 'red' : 'teal'} variant="light">
-                          {s.pctFora}%
-                        </Badge>
-                      </Table.Td>
-                        <Table.Td><Text c="dimmed" size="sm">{s.spec || '—'}</Text></Table.Td>
-                    </Table.Tr>
-                  ))}
-                  {statsPorCota.length === 0 && (
-                    <Table.Tr><Table.Td colSpan={6}><Text c="dimmed">Sem cotas.</Text></Table.Td></Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-          </Card>
+                ))}
+                {statsPorCota.length === 0 && (
+                  <Table.Tr><Table.Td colSpan={6}><Text c="dimmed">Sem cotas.</Text></Table.Td></Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        </Card>
 
-            {/* Matriz Peça × Cota */}
+        {/* Matriz Peça × Cota */}
         <Card withBorder radius="lg" p="md" style={{ gridRow: 2 }}>
-              <Text fw={600} mb="xs">Medições (Peça × Cota)</Text>
-            <ScrollArea w="100%" type="auto">
-              <Table striped highlightOnHover stickyHeader withRowBorders={false}>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th
-                      style={{
-                        position: 'sticky',
-                        left: 0,
-                        background: 'var(--mantine-color-body)',
-                        zIndex: 2,
-                        width: 90
-                      }}
-                        >
-                          Peça
+          <Text fw={600} mb="xs">Medições (Peça × Cota)</Text>
+          <ScrollArea w="100%" type="auto">
+            <Table striped highlightOnHover stickyHeader withRowBorders={false}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th
+                    style={{
+                      position: 'sticky',
+                      left: 0,
+                      background: 'var(--mantine-color-body)',
+                      zIndex: 2,
+                      width: 90
+                    }}
+                  >
+                    Peça
+                  </Table.Th>
+                  {cotas.map((c) => (
+                    <Table.Th key={c.id} style={{ whiteSpace: 'nowrap' }}>
+                      Cota {c.etiqueta}
                     </Table.Th>
-                    {cotas.map((c) => (
-                      <Table.Th key={c.id} style={{ whiteSpace: 'nowrap' }}>
-                        Cota {c.etiqueta}
-                      </Table.Th>
-                    ))}
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {amostras.map((a) => {
-                    const map = matrix.get(a.id);
-                    return (
-                      <Table.Tr key={a.id}>
-                        <Table.Td
-                          style={{
-                            position: 'sticky',
-                            left: 0,
-                            background: 'var(--mantine-color-body)',
-                            zIndex: 1,
-                            fontWeight: 600
-                          }}
-                        >
-                          {a.indice}
-                        </Table.Td>
-                        {cotas.map((c) => {
-                          const v = map?.get(c.id);
-                          if (v == null) return (
-                            <Table.Td key={c.id} style={{ whiteSpace: 'nowrap' }}>
-                              <Text c="dimmed">–</Text>
-                            </Table.Td>
-                          );
-                          const ok = dentroDaTolerancia(c, v);
-                          const txt = fmtBR(v);
-                          const faded = apenasFora && ok === true;
-                          return (
-                            <Table.Td key={c.id} style={{ whiteSpace: 'nowrap', opacity: faded ? 0.35 : 1 }}>
-                              {ok === null ? (
-                                txt
-                              ) : (
-                                <span
-                                  style={{
-                                    background: ok ? '#dcfce7' : '#fee2e2',
-                                    padding: '2px 6px',
-                                    borderRadius: 6,
-                                    fontWeight: ok ? 500 : 700
-                                  }}
-                                    title={ok ? 'Dentro da tolerância' : 'Fora da tolerância'}
-                                >
-                                  {txt}
-                                </span>
-                              )}
-                            </Table.Td>
-                          );
-                        })}
-                      </Table.Tr>
-                    );
-                  })}
-                  {amostras.length === 0 && (
-                    <Table.Tr>
-                      <Table.Td colSpan={1 + cotas.length}><Text c="dimmed">Sem amostras.</Text></Table.Td>
+                  ))}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {amostras.map((a) => {
+                  const map = matrix.get(a.id);
+                  return (
+                    <Table.Tr key={a.id}>
+                      <Table.Td
+                        style={{
+                          position: 'sticky',
+                          left: 0,
+                          background: 'var(--mantine-color-body)',
+                          zIndex: 1,
+                          fontWeight: 600
+                        }}
+                      >
+                        {a.indice}
+                      </Table.Td>
+                      {cotas.map((c) => {
+                        const v = map?.get(c.id);
+                        if (v == null) return (
+                          <Table.Td key={c.id} style={{ whiteSpace: 'nowrap' }}>
+                            <Text c="dimmed">–</Text>
+                          </Table.Td>
+                        );
+                        const ok = dentroDaTolerancia(c, v);
+                        const txt = fmtBR(v);
+                        const faded = apenasFora && ok === true;
+                        return (
+                          <Table.Td key={c.id} style={{ whiteSpace: 'nowrap', opacity: faded ? 0.35 : 1 }}>
+                            {ok === null ? (
+                              txt
+                            ) : (
+                              <span
+                                style={{
+                                  background: ok ? '#dcfce7' : '#fee2e2',
+                                  padding: '2px 6px',
+                                  borderRadius: 6,
+                                  fontWeight: ok ? 500 : 700
+                                }}
+                                title={ok ? 'Dentro da tolerância' : 'Fora da tolerância'}
+                              >
+                                {txt}
+                              </span>
+                            )}
+                          </Table.Td>
+                        );
+                      })}
                     </Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
-            </ScrollArea>
-          </Card>
+                  );
+                })}
+                {amostras.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={1 + cotas.length}><Text c="dimmed">Sem amostras.</Text></Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        </Card>
       </div>
-      <Modal
-        opened={imgOpen}
-        onClose={() => setImgOpen(false)}
-        fullScreen
-        overlayProps={{ blur: 2, opacity: 0.35 }}
-        padding="md"
-        title={`${desenho.codigo} — ${desenho.nome}`}
+
+      {/* Modal de imagem só quando existe desenho */}
+      {hasDesenho && (
+        <Modal
+          opened={imgOpen}
+          onClose={() => setImgOpen(false)}
+          fullScreen
+          overlayProps={{ blur: 2, opacity: 0.35 }}
+          padding="md"
+          title={`${desenho!.codigo} — ${desenho!.nome}`}
         >
-        <Image
-            src={desenho.imagem_url}
-            alt={desenho.nome}
+          <Image
+            src={desenho!.imagem_url}
+            alt={desenho!.nome}
             fit="contain"
-            // ocupa praticamente a tela inteira, respeitando o header do Modal
             h={`calc(100vh - ${rem(140)})`}
             style={{ userSelect: 'none' }}
-        />
-      </Modal>
+          />
+        </Modal>
+      )}
     </>
   );
 }

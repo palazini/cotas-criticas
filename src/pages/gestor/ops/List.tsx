@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Badge, Button, Card, Group, Loader, SegmentedControl, Table, Text } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Loader,
+  Modal,
+  SegmentedControl,
+  Table,
+  Text,
+  Stack
+} from '@mantine/core';
+import { IconPlus, IconTrash } from '@tabler/icons-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PageHeader from '../../../components/PageHeader';
 import { supabase } from '../../../lib/supabase';
+import { notifications } from '@mantine/notifications';
 
 type OPRow = {
   id: string;
@@ -12,8 +25,8 @@ type OPRow = {
   created_at: string | null;
   qty: number | null;
   freq: number | null;
-  desenho_codigo: string;
-  desenho_nome: string;
+  desenho_codigo: string | null;
+  desenho_nome: string | null;
 };
 
 export default function OPsList() {
@@ -23,6 +36,11 @@ export default function OPsList() {
   const [filtro, setFiltro] = useState<'todas' | 'abertas' | 'concluidas'>('todas');
   const [rows, setRows] = useState<OPRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal de exclusão
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [target, setTarget] = useState<OPRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // ler ?t=abertas|concluidas|todas
   useEffect(() => {
@@ -40,7 +58,20 @@ export default function OPsList() {
         .from('ops_view')
         .select('id,codigo,status,created_at,qty,freq,desenho_codigo,desenho_nome')
         .order('created_at', { ascending: false });
-      if (!error && data) setRows(data as OPRow[]);
+
+      if (!error && data) {
+        const safe = (data as any[]).map((d) => ({
+          id: d.id,
+          codigo: d.codigo,
+          status: d.status,
+          created_at: d.created_at,
+          qty: d.qty,
+          freq: d.freq,
+          desenho_codigo: d.desenho_codigo ?? null,
+          desenho_nome: d.desenho_nome ?? null,
+        })) as OPRow[];
+        setRows(safe);
+      }
       setLoading(false);
     })();
   }, []);
@@ -48,6 +79,38 @@ export default function OPsList() {
   const filtered = rows.filter((op) =>
     filtro === 'todas' ? true : filtro === 'abertas' ? op.status === 'aberta' : op.status === 'concluida'
   );
+
+  function openConfirm(op: OPRow, e: React.MouseEvent) {
+    e.stopPropagation();
+    setTarget(op);
+    setConfirmOpen(true);
+  }
+
+  async function onConfirmDelete() {
+    if (!target) return;
+    setDeleting(true);
+    try {
+      const del = await supabase.from('ops').delete().eq('id', target.id);
+      if (del.error) {
+        notifications.show({ color: 'red', title: 'Erro ao excluir OP', message: del.error.message });
+        setDeleting(false);
+        return;
+      }
+      // atualiza UI
+      setRows((prev) => prev.filter((r) => r.id !== target.id));
+      notifications.show({
+        color: 'teal',
+        title: 'OP excluída',
+        message: `${target.codigo} foi removida (amostras e medições relacionadas também foram apagadas).`,
+      });
+      setConfirmOpen(false);
+      setTarget(null);
+    } catch (err: any) {
+      notifications.show({ color: 'red', title: 'Falha na exclusão', message: err?.message || String(err) });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <>
@@ -63,7 +126,9 @@ export default function OPsList() {
 
       <Card withBorder radius="lg">
         <Group justify="space-between" mb="sm">
-          <Text c="dimmed" size="sm">Total: {rows.length}</Text>
+          <Text c="dimmed" size="sm">
+            Total: {rows.length}
+          </Text>
           <SegmentedControl
             value={filtro}
             onChange={(v) => setFiltro(v as typeof filtro)}
@@ -88,24 +153,30 @@ export default function OPsList() {
                 <Table.Th style={{ width: 120 }}>Qty/Freq</Table.Th>
                 <Table.Th style={{ width: 120 }}>Status</Table.Th>
                 <Table.Th style={{ width: 200 }}>Criada em</Table.Th>
+                <Table.Th style={{ width: 90, textAlign: 'right' }}>Ações</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {filtered.map((op) => {
                 const isClickable = op.status === 'concluida';
+                const desenhoStr =
+                  op.desenho_codigo && op.desenho_nome
+                    ? `${op.desenho_codigo} — ${op.desenho_nome}`
+                    : '— sem desenho —';
+
                 return (
                   <Table.Tr
                     key={op.id}
                     onClick={() => isClickable && nav(`/gestor/ops/${op.id}`)}
-                    style={{ cursor: isClickable ? 'pointer' : 'default', opacity: isClickable ? 1 : 0.8 }}
+                    style={{ cursor: isClickable ? 'pointer' : 'default', opacity: isClickable ? 1 : 0.9 }}
                     title={isClickable ? 'Ver detalhes' : 'Disponível após conclusão'}
                   >
                     <Table.Td>
                       <Badge variant="light">{op.codigo}</Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Text c="dimmed" size="sm">
-                        {op.desenho_codigo} — {op.desenho_nome}
+                      <Text c={op.desenho_codigo ? 'dimmed' : 'red'} size="sm">
+                        {desenhoStr}
                       </Text>
                     </Table.Td>
                     <Table.Td>
@@ -119,12 +190,24 @@ export default function OPsList() {
                     <Table.Td>
                       <Text c="dimmed">{op.created_at?.slice(0, 19).replace('T', ' ')}</Text>
                     </Table.Td>
+                    <Table.Td>
+                      <Group justify="flex-end">
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          title="Excluir OP"
+                          onClick={(e) => openConfirm(op, e)}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Group>
+                    </Table.Td>
                   </Table.Tr>
                 );
               })}
               {filtered.length === 0 && (
                 <Table.Tr>
-                  <Table.Td colSpan={5}>
+                  <Table.Td colSpan={6}>
                     <Text c="dimmed">Nenhuma OP.</Text>
                   </Table.Td>
                 </Table.Tr>
@@ -133,6 +216,34 @@ export default function OPsList() {
           </Table>
         )}
       </Card>
+
+      {/* Modal de confirmação */}
+      <Modal
+        opened={confirmOpen}
+        onClose={() => !deleting && setConfirmOpen(false)}
+        title="Excluir OP"
+        centered
+      >
+        {target ? (
+          <Stack gap="sm">
+            <Text>
+              Tem certeza que deseja excluir a OP <strong>{target.codigo}</strong>?
+            </Text>
+            <Text c="red" size="sm">
+              Esta ação removerá também <strong>todas as amostras</strong> e <strong>medições</strong> relacionadas
+              (via exclusão em cascata).
+            </Text>
+            <Group justify="flex-end" mt="sm">
+              <Button variant="default" onClick={() => setConfirmOpen(false)} disabled={deleting}>
+                Cancelar
+              </Button>
+              <Button color="red" onClick={onConfirmDelete} loading={deleting}>
+                Excluir
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
     </>
   );
 }

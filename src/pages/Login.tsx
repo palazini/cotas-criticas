@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Box, Button, Card, Group, PasswordInput, SegmentedControl,
-  Stack, Text, TextInput, Title, rem
+  Stack, Text, TextInput, Title, Image, rem
 } from '@mantine/core';
 import { IconAt, IconLock, IconLogin } from '@tabler/icons-react';
 import { useAuth } from '../app/AuthProvider';
@@ -47,9 +47,9 @@ export default function Login() {
         placeItems: 'center',
         padding: 'clamp(16px, 2vw, 32px)',
         background:
-          'radial-gradient(1200px 600px at 20% 10%, rgba(99,102,241,0.25), transparent 60%), ' +
-          'radial-gradient(1000px 500px at 80% 90%, rgba(16,185,129,0.25), transparent 60%), ' +
-          'linear-gradient(180deg, #fafafa 0%, #ffffff 100%)'
+          'radial-gradient(1200px 600px at 20% 10%, rgba(28,74,145,0.10), transparent 60%), ' +
+          'radial-gradient(1000px 500px at 80% 90%, rgba(11,43,86,0.10), transparent 60%), ' +
+          'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)'
       }}
     >
       <Card
@@ -58,16 +58,28 @@ export default function Login() {
         radius="xl"
         p="xl"
         style={{
-          width: 'min(92vw, 440px)',
+          width: 'min(92vw, 460px)',
           backdropFilter: 'blur(10px)',
-          background: 'rgba(255,255,255,0.7)',
+          background: 'rgba(255,255,255,0.75)',
           borderColor: 'rgba(255,255,255,0.6)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.10)'
+          boxShadow: '0 20px 60px rgba(0,0,0,0.08)'
         }}
       >
         <Stack gap="lg">
+          {/* LOGO */}
+          <Group justify="center">
+            <Image
+              src="/brand/logo-horizontal.png"   // ajuste se necessário
+              alt="Logo da Empresa"
+              h={42}
+              fit="contain"
+              style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.05))' }}
+            />
+          </Group>
+
+          {/* Título/subtítulo */}
           <Stack gap={4} align="center">
-            <Title order={2} style={{ letterSpacing: 0.2 }}>Plataforma de Cotas Críticas</Title>
+            <Title order={3} style={{ letterSpacing: 0.2 }}>Plataforma de Cotas Críticas</Title>
             <Text c="dimmed" size="sm">Acesso rápido e otimizado para tablet</Text>
           </Stack>
 
@@ -76,6 +88,7 @@ export default function Login() {
             onChange={(v) => setMode(v as any)}
             fullWidth
             radius="md"
+            color="brand"           // usa a cor da marca
             data={[
               { label: 'Operador', value: 'operador' },
               { label: 'Gestor', value: 'gestor' },
@@ -121,7 +134,11 @@ export default function Login() {
             </Stack>
           )}
 
-          {errorMsg && <Text c="red" size="sm">{errorMsg}</Text>}
+          {errorMsg && (
+            <Text c="red" size="sm" ta="center">
+              {errorMsg}
+            </Text>
+          )}
 
           <Group justify="center">
             <Button
@@ -130,8 +147,8 @@ export default function Login() {
               leftSection={<IconLogin size={16} />}
               loading={loading}
               onClick={onSubmit}
-              variant="gradient"
-              gradient={{ from: 'indigo', to: 'teal', deg: 45 }}
+              color="brand"          // cor sólida da marca
+              variant="filled"
               style={{ width: rem(280) }}
             >
               Entrar
