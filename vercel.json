@@ -1,9 +1,6 @@
 {
   "buildCommand": "vite build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/**/*": { "runtime": "nodejs20.x" }
-  },
   "rewrites": [
     { "source": "/((?!api).*)", "destination": "/" }
   ]
