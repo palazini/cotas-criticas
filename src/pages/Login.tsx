@@ -7,9 +7,17 @@ import { IconAt, IconLock, IconLogin } from '@tabler/icons-react';
 import { useAuth } from '../app/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 
+const GESTOR_DOMAIN = '@m.continua.cc';
+
+function normalizeGestorEmail(input: string) {
+  const raw = input.trim();
+  // Se já tem '@', usamos como veio. Caso contrário, completamos com o domínio.
+  return raw.includes('@') ? raw : `${raw.toLowerCase()}${GESTOR_DOMAIN}`;
+}
+
 export default function Login() {
   const [mode, setMode] = useState<'gestor' | 'operador'>('operador');
-  const [email, setEmail] = useState('');
+  const [gestorLogin, setGestorLogin] = useState(''); // aceita nome OU e-mail
   const [pwd, setPwd] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +36,7 @@ export default function Login() {
     setLoading(true);
     try {
       if (mode === 'gestor') {
+        const email = normalizeGestorEmail(gestorLogin);
         const { error } = await signInGestor(email, pwd);
         if (error) setErrorMsg(error);
       } else {
@@ -69,18 +78,18 @@ export default function Login() {
           {/* LOGO */}
           <Group justify="center">
             <Image
-              src="/brand/logo-horizontal.png"   // ajuste se necessário
+              src="/brand/logo-horizontal.png"
               alt="Logo da Empresa"
               h={42}
               fit="contain"
-              style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.05))' }}
+              style={{ display: 'block', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.05))' }}
             />
           </Group>
 
           {/* Título/subtítulo */}
           <Stack gap={4} align="center">
             <Title order={3} style={{ letterSpacing: 0.2 }}>Plataforma de Cotas Críticas</Title>
-            <Text c="dimmed" size="sm">Acesso rápido e otimizado para tablet</Text>
+            <Text c="dimmed" size="sm">Lançamento digital e facilitado</Text>
           </Stack>
 
           <SegmentedControl
@@ -88,7 +97,7 @@ export default function Login() {
             onChange={(v) => setMode(v as any)}
             fullWidth
             radius="md"
-            color="brand"           // usa a cor da marca
+            color="brand"
             data={[
               { label: 'Operador', value: 'operador' },
               { label: 'Gestor', value: 'gestor' },
@@ -98,11 +107,11 @@ export default function Login() {
           {mode === 'gestor' ? (
             <Stack>
               <TextInput
-                label="E-mail"
-                placeholder="gestor@empresa.com"
+                label="E-mail ou Nome de Usuário"
+                placeholder="nome ou nome@m.continua.cc"
                 leftSection={<IconAt size={16} />}
-                value={email}
-                onChange={(e) => setEmail(e.currentTarget.value)}
+                value={gestorLogin}
+                onChange={(e) => setGestorLogin(e.currentTarget.value)}
                 autoComplete="username"
               />
               <PasswordInput
@@ -117,7 +126,7 @@ export default function Login() {
           ) : (
             <Stack>
               <TextInput
-                label="ID do Operador (4 dígitos)"
+                label="Login (4 dígitos)"
                 placeholder="0001"
                 value={pin}
                 onChange={(e) => {
@@ -129,7 +138,7 @@ export default function Login() {
                 maxLength={4}
               />
               <Text c="dimmed" size="xs">
-                Seu login usa apenas o ID. O sistema converte para e-mail + senha padrão.
+                Seu login sempre será apenas sua chapa.
               </Text>
             </Stack>
           )}
@@ -147,7 +156,7 @@ export default function Login() {
               leftSection={<IconLogin size={16} />}
               loading={loading}
               onClick={onSubmit}
-              color="brand"          // cor sólida da marca
+              color="brand"
               variant="filled"
               style={{ width: rem(280) }}
             >
